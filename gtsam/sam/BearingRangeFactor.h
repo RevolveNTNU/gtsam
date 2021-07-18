@@ -79,7 +79,7 @@ class BearingRangeFactor
   {
     std::vector<Matrix> Hs(2);
     const auto &keys = Factor::keys();
-    const Vector error = unwhitenedError(
+    const Vector error = this->unwhitenedError(
       {{keys[0], genericValue(a1)}, {keys[1], genericValue(a2)}}, 
       Hs);
     if (H1) *H1 = Hs[0];

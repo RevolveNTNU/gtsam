@@ -239,19 +239,24 @@ bool ISAM2Clique::optimizeWildfireNode(const KeySet& replaced, double threshold,
   // TODO(gareth): This code shares a lot of logic w/ linearAlgorithms-inst,
   // potentially refactor
   bool dirty = isDirty(replaced, *changed);
-  if (dirty) {
-    // Temporary copy of the original values, to check how much they change
-    auto originalValues = delta->vector(conditional_->frontals());
 
-    // Back-substitute
-    fastBackSubstitute(delta);
-    count += conditional_->nrFrontals();
+  try {
+    if (dirty) {
+      // Temporary copy of the original values, to check how much they change
+      auto originalValues = delta->vector(conditional_->frontals());
 
-    if (valuesChanged(replaced, originalValues, *delta, threshold)) {
-      markFrontalsAsChanged(changed);
-    } else {
-      restoreFromOriginals(originalValues, delta);
+      // Back-substitute
+      fastBackSubstitute(delta);
+      count += conditional_->nrFrontals();
+
+      if (valuesChanged(replaced, originalValues, *delta, threshold)) {
+        markFrontalsAsChanged(changed);
+      } else {
+        restoreFromOriginals(originalValues, delta);
+      }
     }
+  } catch(...) {
+    std::cout << "Error in optimizeWildfireNode" << std::endl;
   }
 
   return dirty;

@@ -287,10 +287,14 @@ struct GTSAM_EXPORT UpdateImpl {
     // Check the current clique for relinearization
     bool relinearize = false;
     for (Key var : *clique->conditional()) {
-      double maxDelta = delta[var].lpNorm<Eigen::Infinity>();
-      if (maxDelta >= threshold) {
-        relinKeys->insert(var);
-        relinearize = true;
+      try {
+        double maxDelta = delta[var].lpNorm<Eigen::Infinity>();
+        if (maxDelta >= threshold) {
+          relinKeys->insert(var);
+          relinearize = true;
+        }
+      } catch(...) {
+        std::cout << "Error in CheckRelinearizationRecursiveDouble" << std::endl;
       }
     }
 
@@ -524,8 +528,12 @@ struct GTSAM_EXPORT UpdateImpl {
     gttic(GetAffectedFactors);
     FactorIndexSet indices;
     for (const Key key : keys) {
-      const FactorIndices& factors(variableIndex[key]);
-      indices.insert(factors.begin(), factors.end());
+      try {
+        const FactorIndices& factors(variableIndex[key]);
+        indices.insert(factors.begin(), factors.end());
+      } catch(...) {
+        std::cout << "Error in GetAffectedFactors" << std::endl;
+      }
     }
     return indices;
   }
