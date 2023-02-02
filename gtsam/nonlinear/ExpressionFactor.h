@@ -25,6 +25,9 @@
 #include <gtsam/nonlinear/Expression.h>
 #include <gtsam/nonlinear/NonlinearFactor.h>
 #include <numeric>
+#include <boost/serialization/utility.hpp>
+#include <boost/serialization/nvp.hpp>
+
 
 namespace gtsam {
 
