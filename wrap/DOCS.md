@@ -50,6 +50,32 @@ The python wrapper supports keyword arguments for functions/methods. Hence, the 
     ```
 
     - Class variables are read-write so they can be updated directly in Python.
+    - For the Matlab wrapper, specifying the full property type (including namespaces) is required.
+
+    ```cpp
+    class TriangulationResult {
+      gtsam::SharedNoiseModel noiseModel;
+    };
+    ```
+
+    - If the property is part of an enum within the class, the type should be specified as `gtsam::Class::Enum`. Similarly for templated types where `This` is used, e.g. `gtsam::This::Enum`.
+
+    ```cpp
+    class TriangulationResult {
+      enum Status { VALID, DEGENERATE, BEHIND_CAMERA, OUTLIER, FAR_POINT };
+      gtsam::TriangulationResult::Status status;
+    };
+
+    template<PARAMS>
+    virtual class GncParams {
+      enum Verbosity {
+        SILENT,
+        SUMMARY,
+        VALUES
+      };
+      gtsam::This::Verbosity verbosity;
+    };
+    ```
 
 - Operator Overloading (Python only)
     - You can overload operators just like in C++.
@@ -133,9 +159,10 @@ The python wrapper supports keyword arguments for functions/methods. Hence, the 
       template<T, U> class Class2 { ... };
       typedef Class2<Type1, Type2> MyInstantiatedClass;
       ```
-    - Templates can also be defined for methods, properties and static methods.
+    - Templates can also be defined for constructors, methods, properties and static methods.
     - In the class definition, appearances of the template argument(s) will be replaced with their
       instantiated types, e.g. `void setValue(const T& value);`.
+    - Values scoped within templates are supported. E.g. one can use the form `T::Value` where T is a template, as an argument to a method.
     - To refer to the instantiation of the template class itself, use `This`, i.e. `static This Create();`.
     - To create new instantiations in other modules, you must copy-and-paste the whole class definition
       into the new module, but use only your new instantiation types.

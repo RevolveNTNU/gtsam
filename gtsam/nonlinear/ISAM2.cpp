@@ -176,9 +176,11 @@ void ISAM2::recalculateBatch(const ISAM2UpdateParams& updateParams,
   gttic(recalculateBatch);
 
   gttic(add_keys);
-  br::copy(variableIndex_ | br::map_keys,
-           std::inserter(*affectedKeysSet, affectedKeysSet->end()));
 
+  // copy the keys from the variableIndex_ to the affectedKeysSet
+  for (const auto& [key, _] : variableIndex_) {
+    affectedKeysSet->insert(key);
+  }
   // Removed unused keys:
   VariableIndex affectedFactorsVarIndex = variableIndex_;
 
@@ -290,7 +292,7 @@ void ISAM2::recalculateIncremental(const ISAM2UpdateParams& updateParams,
   // Add the orphaned subtrees
   for (const auto& orphan : *orphans)
     factors +=
-        boost::make_shared<BayesTreeOrphanWrapper<ISAM2::Clique> >(orphan);
+        std::make_shared<BayesTreeOrphanWrapper<ISAM2::Clique> >(orphan);
   gttoc(orphans);
 
   // 3. Re-order and eliminate the factor graph into a Bayes net (Algorithm
@@ -396,9 +398,9 @@ void ISAM2::removeVariables(const KeySet& unusedKeys) {
 ISAM2Result ISAM2::update(
     const NonlinearFactorGraph& newFactors, const Values& newTheta,
     const FactorIndices& removeFactorIndices,
-    const boost::optional<FastMap<Key, int> >& constrainedKeys,
-    const boost::optional<FastList<Key> >& noRelinKeys,
-    const boost::optional<FastList<Key> >& extraReelimKeys,
+    const std::optional<FastMap<Key, int> >& constrainedKeys,
+    const std::optional<FastList<Key> >& noRelinKeys,
+    const std::optional<FastList<Key> >& extraReelimKeys,
     bool force_relinearize) {
   ISAM2UpdateParams params;
   params.constrainedKeys = constrainedKeys;
@@ -454,7 +456,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
       update.findFluid(roots_, relinKeys, &result.markedKeys, result.details());
       // 6. Update linearization point for marked variables:
       // \Theta_{J}:=\Theta_{J}+\Delta_{J}.
-      UpdateImpl::ExpmapMasked(delta_, relinKeys, &theta_);
+      theta_.retractMasked(delta_, relinKeys);
     }
     result.variablesRelinearized = result.markedKeys.size();
   }
@@ -478,8 +480,8 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
 /* ************************************************************************* */
 void ISAM2::marginalizeLeaves(
     const FastList<Key>& leafKeysList,
-    boost::optional<FactorIndices&> marginalFactorsIndices,
-    boost::optional<FactorIndices&> deletedFactorsIndices) {
+    FactorIndices* marginalFactorsIndices,
+    FactorIndices* deletedFactorsIndices) {
   // Convert to ordered set
   KeySet leafKeys(leafKeysList.begin(), leafKeysList.end());
 
@@ -525,7 +527,7 @@ void ISAM2::marginalizeLeaves(
 
       // Traverse up the tree to find the root of the marginalized subtree
       sharedClique clique = nodes_[j];
-      while (!clique->parent_._empty()) {
+      while (clique->parent_.use_count() != 0) {
         // Check if parent contains a marginalized leaf variable.  Only need to
         // check the first variable because it is the closest to the leaves.
         sharedClique parent = clique->parent();
@@ -667,7 +669,7 @@ void ISAM2::marginalizeLeaves(
         if (marginalFactorsIndices)
           marginalFactorsIndices->push_back(nonlinearFactors_.size());
         nonlinearFactors_.push_back(
-            boost::make_shared<LinearContainerFactor>(factor));
+            std::make_shared<LinearContainerFactor>(factor));
         if (params_.cacheLinearizedFactors) linearFactors_.push_back(factor);
         for (Key factorKey : *factor) {
           fixedVariables_.insert(factorKey);

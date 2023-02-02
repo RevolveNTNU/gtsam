@@ -42,16 +42,10 @@
 
 #include <CppUnitLite/TestHarness.h>
 
-#include <boost/shared_ptr.hpp>
-#include <boost/tuple/tuple.hpp>
-#include <boost/assign/std/vector.hpp>
-
 #include <cmath>
 #include <list>
 #include <utility>
 #include <vector>
-
-using namespace boost::assign;
 
 #include <iostream>
 
@@ -73,14 +67,13 @@ TEST( GaussianJunctionTreeB, constructor2 ) {
   // create a graph
   NonlinearFactorGraph nlfg;
   Values values;
-  boost::tie(nlfg, values) = createNonlinearSmoother(7);
+  std::tie(nlfg, values) = createNonlinearSmoother(7);
   SymbolicFactorGraph::shared_ptr symbolic = nlfg.symbolic();
 
   // linearize
   GaussianFactorGraph::shared_ptr fg = nlfg.linearize(values);
 
-  Ordering ordering;
-  ordering += X(1), X(3), X(5), X(7), X(2), X(6), X(4);
+  const Ordering ordering {X(1), X(3), X(5), X(7), X(2), X(6), X(4)};
 
   // create an ordering
   GaussianEliminationTree etree(*fg, ordering);
@@ -137,7 +130,7 @@ TEST( GaussianJunctionTreeB, constructor2 ) {
 //  // create a graph
 //  GaussianFactorGraph fg;
 //  Ordering ordering;
-//  boost::tie(fg,ordering) = createSmoother(7);
+//  std::tie(fg,ordering) = createSmoother(7);
 //
 //  // optimize the graph
 //  GaussianJunctionTree tree(fg);
@@ -257,14 +250,14 @@ TEST( GaussianJunctionTreeB, constructor2 ) {
 //
 //  // Compute marginal directly from marginal factor
 //  GaussianFactor::shared_ptr marginalFactor = GaussianMultifrontalSolver(gfg).marginalFactor(1);
-//  JacobianFactor::shared_ptr marginalJacobian = boost::dynamic_pointer_cast<JacobianFactor>(marginalFactor);
+//  JacobianFactor::shared_ptr marginalJacobian = std::dynamic_pointer_cast<JacobianFactor>(marginalFactor);
 //  Matrix actual2 = inverse(marginalJacobian->getA(marginalJacobian->begin()).transpose() * marginalJacobian->getA(marginalJacobian->begin()));
 //
 //  // Compute marginal directly from BayesTree
 //  GaussianBayesTree gbt;
 //  gbt.insert(GaussianJunctionTree(gfg).eliminate(EliminateCholesky));
 //  marginalFactor = gbt.marginalFactor(1, EliminateCholesky);
-//  marginalJacobian = boost::dynamic_pointer_cast<JacobianFactor>(marginalFactor);
+//  marginalJacobian = std::dynamic_pointer_cast<JacobianFactor>(marginalFactor);
 //  Matrix actual3 = inverse(marginalJacobian->getA(marginalJacobian->begin()).transpose() * marginalJacobian->getA(marginalJacobian->begin()));
 //
 //  EXPECT(assert_equal(expected, actual1));

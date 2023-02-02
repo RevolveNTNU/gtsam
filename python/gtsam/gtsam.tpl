@@ -1,11 +1,13 @@
 /**
- * @file  gtsam.cpp
+ * @file    {module_name}.cpp
  * @brief   The auto-generated wrapper C++ source code.
- * @author  Duy-Nguyen Ta, Fan Jiang, Matthew Sklar
- * @date  Aug. 18, 2020
+ * @author  Duy-Nguyen Ta, Fan Jiang, Matthew Sklar, Varun Agrawal
+ * @date    Aug. 18, 2020
  *
  * ** THIS FILE IS AUTO-GENERATED, DO NOT MODIFY! **
  */
+
+#define PYBIND11_DETAILED_ERROR_MESSAGES
 
 // Include relevant boost libraries required by GTSAM
 {include_boost}

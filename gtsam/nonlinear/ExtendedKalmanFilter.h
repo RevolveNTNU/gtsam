@@ -48,12 +48,8 @@ class ExtendedKalmanFilter {
   BOOST_CONCEPT_ASSERT((IsManifold<VALUE>));
 
  public:
-  typedef boost::shared_ptr<ExtendedKalmanFilter<VALUE> > shared_ptr;
+  typedef std::shared_ptr<ExtendedKalmanFilter<VALUE> > shared_ptr;
   typedef VALUE T;
-
-  //@deprecated: any NoiseModelFactor will do, as long as they have the right keys
-  typedef NoiseModelFactor2<VALUE, VALUE> MotionFactor;
-  typedef NoiseModelFactor1<VALUE> MeasurementFactor;
 
  protected:
   T x_;                                     // linearization point
@@ -84,8 +80,9 @@ class ExtendedKalmanFilter {
   /// @{
 
   /**
-   * Calculate predictive density P(x_) ~ \int  P(x_min) P(x_min, x_)
-   * The motion model should be given as a factor with key1 for x_min and key2_ for x
+   * Calculate predictive density
+   *     \f$ P(x_) ~ \int  P(x_min) P(x_min, x_)\f$ 
+   * The motion model should be given as a factor with key1 for \f$x_min\f$ and key2 for \f$x_\f$ 
    */
   T predict(const NoiseModelFactor& motionFactor);
 

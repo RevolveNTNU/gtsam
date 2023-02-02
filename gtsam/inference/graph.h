@@ -24,7 +24,7 @@
 
 #include <boost/graph/graph_traits.hpp>
 #include <boost/graph/adjacency_list.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <gtsam/nonlinear/Values.h>
 
 namespace gtsam {
@@ -83,13 +83,13 @@ namespace gtsam {
    * V = Vertex type
    */
   template<class G, class V, class KEY>
-  boost::tuple<G, V, std::map<KEY,V> >  predecessorMap2Graph(const PredecessorMap<KEY>& p_map);
+  std::tuple<G, V, std::map<KEY,V> >  predecessorMap2Graph(const PredecessorMap<KEY>& p_map);
 
   /**
    * Compose the poses by following the chain specified by the spanning tree
    */
   template<class G, class Factor, class POSE, class KEY>
-  boost::shared_ptr<Values>
+  std::shared_ptr<Values>
     composePoses(const G& graph, const PredecessorMap<KEY>& tree, const POSE& rootPose);
 
 

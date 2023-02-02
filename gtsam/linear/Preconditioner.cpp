@@ -12,9 +12,8 @@
 #include <gtsam/linear/Preconditioner.h>
 #include <gtsam/linear/SubgraphPreconditioner.h>
 #include <gtsam/linear/NoiseModel.h>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <boost/algorithm/string.hpp>
-#include <boost/range/adaptor/map.hpp>
 #include <iostream>
 #include <vector>
 
@@ -145,8 +144,9 @@ void BlockJacobiPreconditioner::build(
 
   /* getting the block diagonals over the factors */
   std::map<Key, Matrix> hessianMap =gfg.hessianBlockDiagonal();
-  for (const Matrix& hessian: hessianMap | boost::adaptors::map_values)
+  for (const auto& [key, hessian]: hessianMap) {
     blocks.push_back(hessian);
+  }
 
   /* if necessary, allocating the memory for cacheing the factorization results */
   if ( nnz > bufferSize_ ) {
@@ -183,18 +183,18 @@ void BlockJacobiPreconditioner::clean() {
 }
 
 /***************************************************************************************/
-boost::shared_ptr<Preconditioner> createPreconditioner(
-    const boost::shared_ptr<PreconditionerParameters> params) {
-  using boost::dynamic_pointer_cast;
+std::shared_ptr<Preconditioner> createPreconditioner(
+    const std::shared_ptr<PreconditionerParameters> params) {
+  using std::dynamic_pointer_cast;
   if (dynamic_pointer_cast<DummyPreconditionerParameters>(params)) {
-    return boost::make_shared<DummyPreconditioner>();
+    return std::make_shared<DummyPreconditioner>();
   } else if (dynamic_pointer_cast<BlockJacobiPreconditionerParameters>(
                  params)) {
-    return boost::make_shared<BlockJacobiPreconditioner>();
+    return std::make_shared<BlockJacobiPreconditioner>();
   } else if (auto subgraph =
                  dynamic_pointer_cast<SubgraphPreconditionerParameters>(
                      params)) {
-    return boost::make_shared<SubgraphPreconditioner>(*subgraph);
+    return std::make_shared<SubgraphPreconditioner>(*subgraph);
   }
 
   throw invalid_argument(

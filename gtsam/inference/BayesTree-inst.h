@@ -10,7 +10,7 @@
  * -------------------------------------------------------------------------- */
 
 /**
- * @file    BayesTree-inl.h
+ * @file    BayesTree-inst.h
  * @brief   Bayes Tree is a tree of cliques of a Bayes Chain
  * @author  Frank Dellaert
  * @author  Michael Kaess
@@ -25,11 +25,7 @@
 #include <gtsam/base/treeTraversal-inst.h>
 #include <gtsam/base/timing.h>
 
-#include <boost/optional.hpp>
-#include <boost/assign/list_of.hpp>
 #include <fstream>
-
-using boost::assign::cref_list_of;
 
 namespace gtsam {
 
@@ -63,20 +59,40 @@ namespace gtsam {
   }
 
   /* ************************************************************************* */
-  template<class CLIQUE>
-  void BayesTree<CLIQUE>::saveGraph(const std::string &s, const KeyFormatter& keyFormatter) const {
-    if (roots_.empty()) throw std::invalid_argument("the root of Bayes tree has not been initialized!");
-    std::ofstream of(s.c_str());
-    of<< "digraph G{\n";
-    for(const sharedClique& root: roots_)
-      saveGraph(of, root, keyFormatter);
-    of<<"}";
+  template <class CLIQUE>
+  void BayesTree<CLIQUE>::dot(std::ostream& os,
+                              const KeyFormatter& keyFormatter) const {
+    if (roots_.empty())
+      throw std::invalid_argument(
+          "the root of Bayes tree has not been initialized!");
+    os << "digraph G{\n";
+    for (const sharedClique& root : roots_) dot(os, root, keyFormatter);
+    os << "}";
+    std::flush(os);
+  }
+
+  /* ************************************************************************* */
+  template <class CLIQUE>
+  std::string BayesTree<CLIQUE>::dot(const KeyFormatter& keyFormatter) const {
+    std::stringstream ss;
+    dot(ss, keyFormatter);
+    return ss.str();
+  }
+
+  /* ************************************************************************* */
+  template <class CLIQUE>
+  void BayesTree<CLIQUE>::saveGraph(const std::string& filename,
+                                    const KeyFormatter& keyFormatter) const {
+    std::ofstream of(filename.c_str());
+    dot(of, keyFormatter);
     of.close();
   }
 
   /* ************************************************************************* */
-  template<class CLIQUE>
-  void BayesTree<CLIQUE>::saveGraph(std::ostream &s, sharedClique clique, const KeyFormatter& indexFormatter, int parentnum) const {
+  template <class CLIQUE>
+  void BayesTree<CLIQUE>::dot(std::ostream& s, sharedClique clique,
+                              const KeyFormatter& keyFormatter,
+                              int parentnum) const {
     static int num = 0;
     bool first = true;
     std::stringstream out;
@@ -84,10 +100,10 @@ namespace gtsam {
     std::string parent = out.str();
     parent += "[label=\"";
 
-    for (Key index : clique->conditional_->frontals()) {
-      if (!first) parent += ",";
+    for (Key key : clique->conditional_->frontals()) {
+      if (!first) parent += ", ";
       first = false;
-      parent += indexFormatter(index);
+      parent += keyFormatter(key);
     }
 
     if (clique->parent()) {
@@ -96,10 +112,10 @@ namespace gtsam {
     }
 
     first = true;
-    for (Key sep : clique->conditional_->parents()) {
-      if (!first) parent += ",";
+    for (Key parentKey : clique->conditional_->parents()) {
+      if (!first) parent += ", ";
       first = false;
-      parent += indexFormatter(sep);
+      parent += keyFormatter(parentKey);
     }
     parent += "\"];\n";
     s << parent;
@@ -107,7 +123,7 @@ namespace gtsam {
 
     for (sharedClique c : clique->children) {
       num++;
-      saveGraph(s, c, indexFormatter, parentnum);
+      dot(s, c, keyFormatter, parentnum);
     }
   }
 
@@ -139,7 +155,7 @@ namespace gtsam {
   struct _pushCliqueFunctor {
     _pushCliqueFunctor(FactorGraph<FACTOR>* graph_) : graph(graph_) {}
     FactorGraph<FACTOR>* graph;
-    int operator()(const boost::shared_ptr<CLIQUE>& clique, int dummy) {
+    int operator()(const std::shared_ptr<CLIQUE>& clique, int dummy) {
       graph->push_back(clique->conditional_);
       return 0;
     }
@@ -165,11 +181,11 @@ namespace gtsam {
   /* ************************************************************************* */
   namespace {
     template<typename NODE>
-    boost::shared_ptr<NODE>
-      BayesTreeCloneForestVisitorPre(const boost::shared_ptr<NODE>& node, const boost::shared_ptr<NODE>& parentPointer)
+    std::shared_ptr<NODE>
+      BayesTreeCloneForestVisitorPre(const std::shared_ptr<NODE>& node, const std::shared_ptr<NODE>& parentPointer)
     {
       // Clone the current node and add it to its cloned parent
-      boost::shared_ptr<NODE> clone = boost::make_shared<NODE>(*node);
+      std::shared_ptr<NODE> clone = std::make_shared<NODE>(*node);
       clone->children.clear();
       clone->parent_ = parentPointer;
       parentPointer->children.push_back(clone);
@@ -181,7 +197,7 @@ namespace gtsam {
   template<class CLIQUE>
   BayesTree<CLIQUE>& BayesTree<CLIQUE>::operator=(const This& other) {
     this->clear();
-    boost::shared_ptr<Clique> rootContainer = boost::make_shared<Clique>();
+    std::shared_ptr<Clique> rootContainer = std::make_shared<Clique>();
     treeTraversal::DepthFirstForest(other, rootContainer, BayesTreeCloneForestVisitorPre<Clique>);
     for(const sharedClique& root: rootContainer->children) {
       root->parent_ = typename Clique::weak_ptr(); // Reset the parent since it's set to the dummy clique
@@ -261,8 +277,8 @@ namespace gtsam {
     FactorGraphType cliqueMarginal = clique->marginal2(function);
 
     // Now, marginalize out everything that is not variable j
-    BayesNetType marginalBN = *cliqueMarginal.marginalMultifrontalBayesNet(
-      Ordering(cref_list_of<1,Key>(j)), function);
+    BayesNetType marginalBN =
+        *cliqueMarginal.marginalMultifrontalBayesNet(Ordering{j}, function);
 
     // The Bayes net should contain only one conditional for variable j, so return it
     return marginalBN.front();
@@ -276,7 +292,7 @@ namespace gtsam {
     BayesTree<CLIQUE>::joint(Key j1, Key j2, const Eliminate& function) const
   {
     gttic(BayesTree_joint);
-    return boost::make_shared<FactorGraphType>(*jointBayesNet(j1, j2, function));
+    return std::make_shared<FactorGraphType>(*jointBayesNet(j1, j2, function));
   }
 
   /* ************************************************************************* */
@@ -336,7 +352,7 @@ namespace gtsam {
       // Factor the shortcuts to be conditioned on the full root
       // Get the set of variables to eliminate, which is C1\B.
       gttic(Full_root_factoring);
-      boost::shared_ptr<typename EliminationTraitsType::BayesTreeType> p_C1_B; {
+      std::shared_ptr<typename EliminationTraitsType::BayesTreeType> p_C1_B; {
         KeyVector C1_minus_B; {
           KeySet C1_minus_B_set(C1->conditional()->beginParents(), C1->conditional()->endParents());
           for(const Key j: *B->conditional()) {
@@ -345,10 +361,10 @@ namespace gtsam {
         }
         // Factor into C1\B | B.
         sharedFactorGraph temp_remaining;
-        boost::tie(p_C1_B, temp_remaining) =
+        std::tie(p_C1_B, temp_remaining) =
           FactorGraphType(p_C1_Bred).eliminatePartialMultifrontal(Ordering(C1_minus_B), function);
       }
-      boost::shared_ptr<typename EliminationTraitsType::BayesTreeType> p_C2_B; {
+      std::shared_ptr<typename EliminationTraitsType::BayesTreeType> p_C2_B; {
         KeyVector C2_minus_B; {
           KeySet C2_minus_B_set(C2->conditional()->beginParents(), C2->conditional()->endParents());
           for(const Key j: *B->conditional()) {
@@ -357,7 +373,7 @@ namespace gtsam {
         }
         // Factor into C2\B | B.
         sharedFactorGraph temp_remaining;
-        boost::tie(p_C2_B, temp_remaining) =
+        std::tie(p_C2_B, temp_remaining) =
           FactorGraphType(p_C2_Bred).eliminatePartialMultifrontal(Ordering(C2_minus_B), function);
       }
       gttoc(Full_root_factoring);
@@ -383,7 +399,7 @@ namespace gtsam {
     }
 
     // now, marginalize out everything that is not variable j1 or j2
-    return p_BC1C2.marginalMultifrontalBayesNet(Ordering(cref_list_of<2,Key>(j1)(j2)), function);
+    return p_BC1C2.marginalMultifrontalBayesNet(Ordering{j1, j2}, function);
   }
 
   /* ************************************************************************* */

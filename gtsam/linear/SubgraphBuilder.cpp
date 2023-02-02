@@ -27,7 +27,9 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
+#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
 #include <boost/serialization/vector.hpp>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -91,6 +93,7 @@ vector<size_t> Subgraph::edgeIndices() const {
   return eid;
 }
 
+#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
 /****************************************************************************/
 void Subgraph::save(const std::string &fn) const {
   std::ofstream os(fn.c_str());
@@ -108,6 +111,7 @@ Subgraph Subgraph::load(const std::string &fn) {
   is.close();
   return subgraph;
 }
+#endif
 
 /****************************************************************************/
 ostream &operator<<(ostream &os, const Subgraph::Edge &edge) {
@@ -337,7 +341,6 @@ vector<size_t> SubgraphBuilder::kruskal(const GaussianFactorGraph &gfg,
   DSFVector dsf(n);
 
   size_t count = 0;
-  double sum = 0.0;
   for (const size_t index : sortedIndices) {
     const GaussianFactor &gf = *gfg[index];
     const auto keys = gf.keys();
@@ -347,7 +350,6 @@ vector<size_t> SubgraphBuilder::kruskal(const GaussianFactorGraph &gfg,
     if (dsf.find(u) != dsf.find(v)) {
       dsf.merge(u, v);
       treeIndices.push_back(index);
-      sum += weights[index];
       if (++count == n - 1) break;
     }
   }
@@ -415,19 +417,19 @@ SubgraphBuilder::Weights SubgraphBuilder::weights(
         break;
       case SubgraphBuilderParameters::RHS_2NORM: {
         if (JacobianFactor::shared_ptr jf =
-                boost::dynamic_pointer_cast<JacobianFactor>(gf)) {
+                std::dynamic_pointer_cast<JacobianFactor>(gf)) {
           weight.push_back(jf->getb().norm());
         } else if (HessianFactor::shared_ptr hf =
-                       boost::dynamic_pointer_cast<HessianFactor>(gf)) {
+                       std::dynamic_pointer_cast<HessianFactor>(gf)) {
           weight.push_back(hf->linearTerm().norm());
         }
       } break;
       case SubgraphBuilderParameters::LHS_FNORM: {
         if (JacobianFactor::shared_ptr jf =
-                boost::dynamic_pointer_cast<JacobianFactor>(gf)) {
+                std::dynamic_pointer_cast<JacobianFactor>(gf)) {
           weight.push_back(std::sqrt(jf->getA().squaredNorm()));
         } else if (HessianFactor::shared_ptr hf =
-                       boost::dynamic_pointer_cast<HessianFactor>(gf)) {
+                       std::dynamic_pointer_cast<HessianFactor>(gf)) {
           weight.push_back(std::sqrt(hf->information().squaredNorm()));
         }
       } break;
@@ -446,30 +448,29 @@ SubgraphBuilder::Weights SubgraphBuilder::weights(
 }
 
 /*****************************************************************************/
-GaussianFactorGraph::shared_ptr buildFactorSubgraph(
-    const GaussianFactorGraph &gfg, const Subgraph &subgraph,
-    const bool clone) {
-  auto subgraphFactors = boost::make_shared<GaussianFactorGraph>();
-  subgraphFactors->reserve(subgraph.size());
+GaussianFactorGraph buildFactorSubgraph(const GaussianFactorGraph &gfg,
+                                        const Subgraph &subgraph,
+                                        const bool clone) {
+  GaussianFactorGraph subgraphFactors;
+  subgraphFactors.reserve(subgraph.size());
   for (const auto &e : subgraph) {
     const auto factor = gfg[e.index];
-    subgraphFactors->push_back(clone ? factor->clone() : factor);
+    subgraphFactors.push_back(clone ? factor->clone() : factor);
   }
   return subgraphFactors;
 }
 
 /**************************************************************************************************/
-std::pair<GaussianFactorGraph::shared_ptr, GaussianFactorGraph::shared_ptr>  //
-splitFactorGraph(const GaussianFactorGraph &factorGraph,
-                 const Subgraph &subgraph) {
+std::pair<GaussianFactorGraph, GaussianFactorGraph> splitFactorGraph(
+    const GaussianFactorGraph &factorGraph, const Subgraph &subgraph) {
   // Get the subgraph by calling cheaper method
   auto subgraphFactors = buildFactorSubgraph(factorGraph, subgraph, false);
 
   // Now, copy all factors then set subGraph factors to zero
-  auto remaining = boost::make_shared<GaussianFactorGraph>(factorGraph);
+  GaussianFactorGraph remaining = factorGraph;
 
   for (const auto &e : subgraph) {
-    remaining->remove(e.index);
+    remaining.remove(e.index);
   }
 
   return std::make_pair(subgraphFactors, remaining);

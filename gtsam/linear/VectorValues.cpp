@@ -19,21 +19,13 @@
 #include <gtsam/linear/VectorValues.h>
 
 #include <boost/bind/bind.hpp>
-#include <boost/range/combine.hpp>
 #include <boost/range/numeric.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/adaptor/map.hpp>
 
 using namespace std;
 
 namespace gtsam {
 
-  using boost::combine;
-  using boost::adaptors::transformed;
-  using boost::adaptors::map_values;
-  using boost::accumulate;
-
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues::VectorValues(const VectorValues& first, const VectorValues& second)
   {
     // Merge using predicate for comparing first of pair
@@ -44,14 +36,10 @@ namespace gtsam {
       throw invalid_argument("Requested to merge two VectorValues that have one or more variables in common.");
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues::VectorValues(const Vector& x, const Dims& dims) {
-    using Pair = pair<const Key, size_t>;
     size_t j = 0;
-    for (const Pair& v : dims) {
-      Key key;
-      size_t n;
-      boost::tie(key, n) = v;
+    for (const auto& [key,n] : dims)  {
 #ifdef TBB_GREATER_EQUAL_2020
       values_.emplace(key, x.segment(j, n));
 #else
@@ -61,7 +49,7 @@ namespace gtsam {
     }
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues::VectorValues(const Vector& x, const Scatter& scatter) {
     size_t j = 0;
     for (const SlotEntry& v : scatter) {
@@ -74,20 +62,20 @@ namespace gtsam {
     }
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues VectorValues::Zero(const VectorValues& other)
   {
     VectorValues result;
-    for(const KeyValuePair& v: other)
+    for(const auto& [key,value]: other)
 #ifdef TBB_GREATER_EQUAL_2020
-      result.values_.emplace(v.first, Vector::Zero(v.second.size()));
+      result.values_.emplace(key, Vector::Zero(value.size()));
 #else
-      result.values_.insert(std::make_pair(v.first, Vector::Zero(v.second.size())));
+      result.values_.insert(std::make_pair(key, Vector::Zero(value.size())));
 #endif
     return result;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues::iterator VectorValues::insert(const std::pair<Key, Vector>& key_value) {
     std::pair<iterator, bool> result = values_.insert(key_value);
     if(!result.second)
@@ -97,60 +85,64 @@ namespace gtsam {
     return result.first;
   }
 
-  /* ************************************************************************* */
-  void VectorValues::update(const VectorValues& values)
-  {
+  /* ************************************************************************ */
+  VectorValues& VectorValues::update(const VectorValues& values) {
     iterator hint = begin();
-    for(const KeyValuePair& key_value: values)
-    {
-      // Use this trick to find the value using a hint, since we are inserting from another sorted map
+    for (const auto& [key,value] : values) {
+      // Use this trick to find the value using a hint, since we are inserting
+      // from another sorted map
       size_t oldSize = values_.size();
-      hint = values_.insert(hint, key_value);
-      if(values_.size() > oldSize) {
+      hint = values_.emplace_hint(hint, key, value);
+      if (values_.size() > oldSize) {
         values_.unsafe_erase(hint);
-        throw out_of_range("Requested to update a VectorValues with another VectorValues that contains keys not present in the first.");
+        throw out_of_range(
+            "Requested to update a VectorValues with another VectorValues that "
+            "contains keys not present in the first.");
       } else {
-        hint->second = key_value.second;
+        hint->second = value;
       }
+    }
+    return *this;
+  }
+
+  /* ************************************************************************ */
+  VectorValues& VectorValues::insert(const VectorValues& values) {
+    size_t originalSize = size();
+    values_.insert(values.begin(), values.end());
+    if (size() != originalSize + values.size())
+      throw invalid_argument(
+          "Requested to insert a VectorValues into another VectorValues that "
+          "already contains one or more of its keys.");
+    return *this;
+  }
+
+  /* ************************************************************************ */
+  void VectorValues::setZero()
+  {
+    for(auto& [key, value] : *this) {
+      value.setZero();
     }
   }
 
-  /* ************************************************************************* */
-  void VectorValues::insert(const VectorValues& values)
-  {
-    size_t originalSize = size();
-    values_.insert(values.begin(), values.end());
-    if(size() != originalSize + values.size())
-      throw invalid_argument("Requested to insert a VectorValues into another VectorValues that already contains one or more of its keys.");
-  }
-
-  /* ************************************************************************* */
-  void VectorValues::setZero()
-  {
-    for(Vector& v: values_ | map_values)
-      v.setZero();
-  }
-
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   GTSAM_EXPORT ostream& operator<<(ostream& os, const VectorValues& v) {
     // Change print depending on whether we are using TBB
 #ifdef GTSAM_USE_TBB
     map<Key, Vector> sorted;
-    for (const auto& key_value : v) {
-      sorted.emplace(key_value.first, key_value.second);
+    for (const auto& [key,value] : v) {
+      sorted.emplace(key, value);
     }
-    for (const auto& key_value : sorted)
+    for (const auto& [key,value] : sorted)
 #else
-    for (const auto& key_value : v)
+    for (const auto& [key,value] : v)
 #endif
     {
-      os << "  " << StreamedKey(key_value.first) << ": " << key_value.second.transpose()
-         << "\n";
+      os << "  " << StreamedKey(key) << ": " << value.transpose() << "\n";
     }
     return os;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   void VectorValues::print(const string& str,
                            const KeyFormatter& formatter) const {
     cout << str << ": " << size() << " elements\n";
@@ -158,41 +150,44 @@ namespace gtsam {
     cout.flush();
 }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   bool VectorValues::equals(const VectorValues& x, double tol) const {
     if(this->size() != x.size())
       return false;
-    for(const auto values: boost::combine(*this, x)) {
-      if(values.get<0>().first != values.get<1>().first ||
-        !equal_with_abs_tol(values.get<0>().second, values.get<1>().second, tol))
+    auto this_it = this->begin();
+    auto x_it = x.begin();
+    for(; this_it != this->end(); ++this_it, ++x_it) {
+      if(this_it->first != x_it->first || 
+          !equal_with_abs_tol(this_it->second, x_it->second, tol))
         return false;
     }
     return true;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   Vector VectorValues::vector() const {
     // Count dimensions
     DenseIndex totalDim = 0;
-    for (const Vector& v : *this | map_values) totalDim += v.size();
+    for (const auto& [key, value] : *this)
+      totalDim += value.size();
 
     // Copy vectors
     Vector result(totalDim);
     DenseIndex pos = 0;
-    for (const Vector& v : *this | map_values) {
-      result.segment(pos, v.size()) = v;
-      pos += v.size();
+    for (const auto& [key, value] : *this) {
+      result.segment(pos, value.size()) = value;
+      pos += value.size();
     }
 
     return result;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   Vector VectorValues::vector(const Dims& keys) const
   {
     // Count dimensions
     DenseIndex totalDim = 0;
-    for(size_t dim: keys | map_values)
+    for (const auto& [key, dim] : keys)
       totalDim += dim;
     Vector result(totalDim);
     size_t j = 0;
@@ -203,62 +198,62 @@ namespace gtsam {
     return result;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   void VectorValues::swap(VectorValues& other) {
     this->values_.swap(other.values_);
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   namespace internal
   {
-    bool structureCompareOp(const boost::tuple<VectorValues::value_type,
-      VectorValues::value_type>& vv)
+    bool structureCompareOp(const VectorValues::value_type& a, const VectorValues::value_type& b)
     {
-      return vv.get<0>().first == vv.get<1>().first
-        && vv.get<0>().second.size() == vv.get<1>().second.size();
+      return a.first == b.first && a.second.size() == b.second.size();
     }
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   bool VectorValues::hasSameStructure(const VectorValues other) const
   {
-    return accumulate(combine(*this, other)
-      | transformed(internal::structureCompareOp), true, logical_and<bool>());
+    // compare the "other" container with this one, using the structureCompareOp
+    // and then return true if all elements are compared as equal
+    return std::equal(this->begin(), this->end(), other.begin(), other.end(),
+      internal::structureCompareOp);
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   double VectorValues::dot(const VectorValues& v) const
   {
     if(this->size() != v.size())
       throw invalid_argument("VectorValues::dot called with a VectorValues of different structure");
     double result = 0.0;
-    typedef boost::tuple<value_type, value_type> ValuePair;
-    using boost::adaptors::map_values;
-    for(const ValuePair values: boost::combine(*this, v)) {
-      assert_throw(values.get<0>().first == values.get<1>().first,
-        invalid_argument("VectorValues::dot called with a VectorValues of different structure"));
-      assert_throw(values.get<0>().second.size() == values.get<1>().second.size(),
-        invalid_argument("VectorValues::dot called with a VectorValues of different structure"));
-      result += values.get<0>().second.dot(values.get<1>().second);
+    auto this_it = this->begin();
+    auto v_it = v.begin();
+    for(; this_it != this->end(); ++this_it, ++v_it) {
+      assert_throw(this_it->first == v_it->first, 
+          invalid_argument("VectorValues::dot called with a VectorValues of different structure"));
+      assert_throw(this_it->second.size() == v_it->second.size(), 
+          invalid_argument("VectorValues::dot called with a VectorValues of different structure"));
+      result += this_it->second.dot(v_it->second);
     }
     return result;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   double VectorValues::norm() const {
     return std::sqrt(this->squaredNorm());
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   double VectorValues::squaredNorm() const {
     double sumSquares = 0.0;
-    using boost::adaptors::map_values;
-    for(const Vector& v: *this | map_values)
-      sumSquares += v.squaredNorm();
+    for(const auto& [key, value]: *this) {
+      sumSquares += value.squaredNorm();
+    }
     return sumSquares;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues VectorValues::operator+(const VectorValues& c) const
   {
     if(this->size() != c.size())
@@ -278,13 +273,13 @@ namespace gtsam {
     return result;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues VectorValues::add(const VectorValues& c) const
   {
     return *this + c;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues& VectorValues::operator+=(const VectorValues& c)
   {
     if(this->size() != c.size())
@@ -301,13 +296,13 @@ namespace gtsam {
     return *this;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues& VectorValues::addInPlace(const VectorValues& c)
   {
     return *this += c;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues& VectorValues::addInPlace_(const VectorValues& c)
   {
     for(const_iterator j2 = c.begin(); j2 != c.end(); ++j2) {
@@ -320,7 +315,7 @@ namespace gtsam {
     return *this;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues VectorValues::operator-(const VectorValues& c) const
   {
     if(this->size() != c.size())
@@ -340,13 +335,13 @@ namespace gtsam {
     return result;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues VectorValues::subtract(const VectorValues& c) const
   {
     return *this - c;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues operator*(const double a, const VectorValues &v)
   {
     VectorValues result;
@@ -359,26 +354,58 @@ namespace gtsam {
     return result;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues VectorValues::scale(const double a) const
   {
     return a * *this;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues& VectorValues::operator*=(double alpha)
   {
-    for(Vector& v: *this | map_values)
-      v *= alpha;
+    for (auto& [key, value]: *this) {
+      value *= alpha;
+    }
     return *this;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
   VectorValues& VectorValues::scaleInPlace(double alpha)
   {
     return *this *= alpha;
   }
 
-  /* ************************************************************************* */
+  /* ************************************************************************ */
+  string VectorValues::html(const KeyFormatter& keyFormatter) const {
+    stringstream ss;
+
+    // Print out preamble.
+    ss << "<div>\n<table class='VectorValues'>\n  <thead>\n";
+
+    // Print out header row.
+    ss << "    <tr><th>Variable</th><th>value</th></tr>\n";
+
+    // Finish header and start body.
+    ss << "  </thead>\n  <tbody>\n";
+
+    // Print out all rows.
+#ifdef GTSAM_USE_TBB
+    // TBB uses un-ordered map, so inefficiently order them:
+    std::map<Key, Vector> ordered;
+    for (const auto& kv : *this) ordered.emplace(kv);
+    for (const auto& kv : ordered) {
+#else
+    for (const auto& kv : *this) {
+#endif
+      ss << "    <tr>";
+      ss << "<th>" << keyFormatter(kv.first) << "</th><td>"
+         << kv.second.transpose() << "</td>";
+      ss << "</tr>\n";
+    }
+    ss << "  </tbody>\n</table>\n</div>";
+    return ss.str();
+  }
+
+  /* ************************************************************************ */
 
 } // \namespace gtsam

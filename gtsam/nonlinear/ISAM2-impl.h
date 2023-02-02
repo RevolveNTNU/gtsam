@@ -28,13 +28,6 @@
 #include <gtsam/linear/GaussianBayesTree.h>
 #include <gtsam/linear/GaussianEliminationTree.h>
 
-#include <boost/range/adaptors.hpp>
-#include <boost/range/algorithm/copy.hpp>
-namespace br {
-using namespace boost::range;
-using namespace boost::adaptors;
-}  // namespace br
-
 #include <algorithm>
 #include <limits>
 #include <string>
@@ -49,7 +42,7 @@ class ISAM2BayesTree : public ISAM2::Base {
  public:
   typedef ISAM2::Base Base;
   typedef ISAM2BayesTree This;
-  typedef boost::shared_ptr<This> shared_ptr;
+  typedef std::shared_ptr<This> shared_ptr;
 
   ISAM2BayesTree() {}
 };
@@ -62,7 +55,7 @@ class ISAM2JunctionTree
  public:
   typedef JunctionTree<ISAM2BayesTree, GaussianFactorGraph> Base;
   typedef ISAM2JunctionTree This;
-  typedef boost::shared_ptr<This> shared_ptr;
+  typedef std::shared_ptr<This> shared_ptr;
 
   explicit ISAM2JunctionTree(const GaussianEliminationTree& eliminationTree)
       : Base(eliminationTree) {}
@@ -78,7 +71,7 @@ struct GTSAM_EXPORT DeltaImpl {
     size_t nFullSystemVars;
     enum { /*AS_ADDED,*/ COLAMD } algorithm;
     enum { NO_CONSTRAINT, CONSTRAIN_LAST } constrain;
-    boost::optional<FastMap<Key, int> > constrainedKeys;
+    std::optional<FastMap<Key, int> > constrainedKeys;
   };
 
   /**
@@ -195,9 +188,9 @@ struct GTSAM_EXPORT UpdateImpl {
 
   // Calculate nonlinear error
   void error(const NonlinearFactorGraph& nonlinearFactors,
-             const Values& estimate, boost::optional<double>* result) const {
+             const Values& estimate, std::optional<double>* result) const {
     gttic(error);
-    result->reset(nonlinearFactors.error(estimate));
+    *result = nonlinearFactors.error(estimate);
   }
 
   // Mark linear update
@@ -436,36 +429,6 @@ struct GTSAM_EXPORT UpdateImpl {
           detail->variableStatus[key].isRelinearizeInvolved = true;
           detail->variableStatus[key].isRelinearized = true;
         }
-      }
-    }
-  }
-
-  /**
-   * Apply expmap to the given values, but only for indices appearing in
-   * \c mask.  Values are expmapped in-place.
-   * \param mask Mask on linear indices, only \c true entries are expmapped
-   */
-  static void ExpmapMasked(const VectorValues& delta, const KeySet& mask,
-                           Values* theta) {
-    gttic(ExpmapMasked);
-    assert(theta->size() == delta.size());
-    Values::iterator key_value;
-    VectorValues::const_iterator key_delta;
-#ifdef GTSAM_USE_TBB
-    for (key_value = theta->begin(); key_value != theta->end(); ++key_value) {
-      key_delta = delta.find(key_value->key);
-#else
-    for (key_value = theta->begin(), key_delta = delta.begin();
-         key_value != theta->end(); ++key_value, ++key_delta) {
-      assert(key_value->key == key_delta->first);
-#endif
-      Key var = key_value->key;
-      assert(static_cast<size_t>(delta[var].size()) == key_value->value.dim());
-      assert(delta[var].allFinite());
-      if (mask.exists(var)) {
-        Value* retracted = key_value->value.retract_(delta[var]);
-        key_value->value = *retracted;
-        retracted->deallocate_();
       }
     }
   }

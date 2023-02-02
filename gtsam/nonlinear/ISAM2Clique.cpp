@@ -240,10 +240,9 @@ bool ISAM2Clique::optimizeWildfireNode(const KeySet& replaced, double threshold,
   // potentially refactor
   bool dirty = isDirty(replaced, *changed);
 
-  try {
-    if (dirty) {
-      // Temporary copy of the original values, to check how much they change
-      auto originalValues = delta->vector(conditional_->frontals());
+    // Back-substitute
+    fastBackSubstitute(delta);
+    *count += conditional_->nrFrontals();
 
       // Back-substitute
       fastBackSubstitute(delta);

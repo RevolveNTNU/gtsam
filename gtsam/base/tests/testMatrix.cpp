@@ -20,9 +20,10 @@
 #include <gtsam/base/VectorSpace.h>
 #include <gtsam/base/testLie.h>
 #include <CppUnitLite/TestHarness.h>
-#include <boost/tuple/tuple.hpp>
 #include <iostream>
 #include <sstream>
+#include <optional>
+#include <functional>
 
 using namespace std;
 using namespace gtsam;
@@ -173,7 +174,7 @@ TEST(Matrix, stack )
 {
   Matrix A = (Matrix(2, 2) << -5.0, 3.0, 00.0, -5.0).finished();
   Matrix B = (Matrix(3, 2) << -0.5, 2.1, 1.1, 3.4, 2.6, 7.1).finished();
-  Matrix AB = stack(2, &A, &B);
+  Matrix AB = gtsam::stack(2, &A, &B);
   Matrix C(5, 2);
   for (int i = 0; i < 2; i++)
     for (int j = 0; j < 2; j++)
@@ -187,7 +188,7 @@ TEST(Matrix, stack )
   std::vector<gtsam::Matrix> matrices;
   matrices.push_back(A);
   matrices.push_back(B);
-  Matrix AB2 = stack(matrices);
+  Matrix AB2 = gtsam::stack(matrices);
   EQUALITY(C,AB2);
 }
 
@@ -857,7 +858,7 @@ TEST(Matrix, qr )
       7.4536, 0, 00, 0, 0, 10.9545, 00, 0, 0, 0, 00, 0, 0, 0).finished();
 
   Matrix Q, R;
-  boost::tie(Q, R) = qr(A);
+  std::tie(Q, R) = qr(A);
   EXPECT(assert_equal(expectedQ, Q, 1e-4));
   EXPECT(assert_equal(expectedR, R, 1e-4));
   EXPECT(assert_equal(A, Q*R, 1e-14));
@@ -909,7 +910,7 @@ TEST(Matrix, weighted_elimination )
   // perform elimination
   Matrix A1 = A;
   Vector b1 = b;
-  std::list<boost::tuple<Vector, double, double> > solution =
+  std::list<std::tuple<Vector, double, double> > solution =
       weighted_eliminate(A1, b1, sigmas);
 
   // unpack and verify
@@ -917,7 +918,7 @@ TEST(Matrix, weighted_elimination )
   for (const auto& tuple : solution) {
     Vector r;
     double di, sigma;
-    boost::tie(r, di, sigma) = tuple;
+    std::tie(r, di, sigma) = tuple;
     EXPECT(assert_equal(r, expectedR.row(i))); // verify r
     DOUBLES_EQUAL(d(i), di, 1e-8); // verify d
     DOUBLES_EQUAL(newSigmas(i), sigma, 1e-5); // verify sigma
@@ -1144,7 +1145,7 @@ TEST(Matrix, DLT )
   int rank;
   double error;
   Vector actual;
-  boost::tie(rank,error,actual) = DLT(A);
+  std::tie(rank,error,actual) = DLT(A);
   Vector expected = (Vector(9) << -0.0, 0.2357, 0.4714, -0.2357, 0.0, - 0.4714,-0.4714, 0.4714, 0.0).finished();
   EXPECT_LONGS_EQUAL(8,rank);
   EXPECT_DOUBLES_EQUAL(0,error,1e-8);
@@ -1174,6 +1175,17 @@ TEST(Matrix, AbsoluteError) {
   // Test relative error as well
   isEqual = fpEqual(a, b, tol);
   EXPECT(isEqual);
+}
+
+// A test to check if a matrix and an optional reference_wrapper to
+// a matrix are equal.
+TEST(Matrix, MatrixRef) {
+  Matrix A = Matrix::Random(3, 3);
+  Matrix B = Matrix::Random(3, 3);
+
+  EXPECT(assert_equal(A, A));
+  EXPECT(assert_equal(A, std::cref(A)));
+  EXPECT(!assert_equal(A, std::cref(B)));
 }
 
 /* ************************************************************************* */

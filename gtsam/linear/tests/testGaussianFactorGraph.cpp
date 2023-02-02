@@ -26,10 +26,6 @@
 #include <gtsam/base/debug.h>
 #include <gtsam/base/VerticalBlockMatrix.h>
 
-#include <boost/assign/list_of.hpp>
-#include <boost/assign/std/list.hpp>  // for operator +=
-using namespace boost::assign;
-
 #include <gtsam/base/TestableAssertions.h>
 #include <CppUnitLite/TestHarness.h>
 
@@ -161,7 +157,7 @@ TEST(GaussianFactorGraph, matrices) {
   Vector b = Ab.col(Ab.cols() - 1);
   Matrix actualA;
   Vector actualb;
-  boost::tie(actualA, actualb) = gfg.jacobian();
+  std::tie(actualA, actualb) = gfg.jacobian();
   EXPECT(assert_equal(A, actualA));
   EXPECT(assert_equal(b, actualb));
 
@@ -170,7 +166,7 @@ TEST(GaussianFactorGraph, matrices) {
   Vector eta = A.transpose() * b;
   Matrix actualL;
   Vector actualeta;
-  boost::tie(actualL, actualeta) = gfg.hessian();
+  std::tie(actualL, actualeta) = gfg.hessian();
   EXPECT(assert_equal(L, actualL));
   EXPECT(assert_equal(eta, actualeta));
 
@@ -212,8 +208,9 @@ TEST(GaussianFactorGraph, gradient) {
   // 2*f(x) = 100*(x1+c[X(1)])^2 + 100*(x2-x1-[0.2;-0.1])^2 + 25*(l1-x1-[0.0;0.2])^2 +
   // 25*(l1-x2-[-0.2;0.3])^2
   // worked out: df/dx1 = 100*[0.1;0.1] + 100*[0.2;-0.1]) + 25*[0.0;0.2] = [10+20;10-10+5] = [30;5]
-  VectorValues expected = map_list_of<Key, Vector>(1, Vector2(5.0, -12.5))(2, Vector2(30.0, 5.0))(
-      0, Vector2(-25.0, 17.5));
+  VectorValues expected{{1, Vector2(5.0, -12.5)},
+                        {2, Vector2(30.0, 5.0)},
+                        {0, Vector2(-25.0, 17.5)}};
 
   // Check the gradient at delta=0
   VectorValues zero = VectorValues::Zero(expected);
@@ -231,8 +228,8 @@ TEST(GaussianFactorGraph, gradient) {
 TEST(GaussianFactorGraph, transposeMultiplication) {
   GaussianFactorGraph A = createSimpleGaussianFactorGraph();
 
-  Errors e;
-  e += Vector2(0.0, 0.0), Vector2(15.0, 0.0), Vector2(0.0, -5.0), Vector2(-7.5, -5.0);
+  Errors e = {Vector2(0.0, 0.0), Vector2(15.0, 0.0), Vector2(0.0, -5.0),
+              Vector2(-7.5, -5.0)};
 
   VectorValues expected;
   expected.insert(1, Vector2(-37.5, -50.0));
@@ -250,7 +247,7 @@ TEST(GaussianFactorGraph, eliminate_empty) {
   gfg.add(JacobianFactor());
   GaussianBayesNet::shared_ptr actualBN;
   GaussianFactorGraph::shared_ptr remainingGFG;
-  boost::tie(actualBN, remainingGFG) = gfg.eliminatePartialSequential(Ordering());
+  std::tie(actualBN, remainingGFG) = gfg.eliminatePartialSequential(Ordering());
 
   // expected Bayes net is empty
   GaussianBayesNet expectedBN;
@@ -268,10 +265,10 @@ TEST(GaussianFactorGraph, matrices2) {
   GaussianFactorGraph gfg = createSimpleGaussianFactorGraph();
   Matrix A;
   Vector b;
-  boost::tie(A, b) = gfg.jacobian();
+  std::tie(A, b) = gfg.jacobian();
   Matrix AtA;
   Vector eta;
-  boost::tie(AtA, eta) = gfg.hessian();
+  std::tie(AtA, eta) = gfg.hessian();
   EXPECT(assert_equal(A.transpose() * A, AtA));
   EXPECT(assert_equal(A.transpose() * b, eta));
   Matrix expectedAtA(6, 6);
@@ -288,7 +285,7 @@ TEST(GaussianFactorGraph, matrices2) {
 TEST(GaussianFactorGraph, multiplyHessianAdd) {
   GaussianFactorGraph gfg = createSimpleGaussianFactorGraph();
 
-  VectorValues x = map_list_of<Key, Vector>(0, Vector2(1, 2))(1, Vector2(3, 4))(2, Vector2(5, 6));
+  const VectorValues x{{0, Vector2(1, 2)}, {1, Vector2(3, 4)}, {2, Vector2(5, 6)}};
 
   VectorValues expected;
   expected.insert(0, Vector2(-450, -450));
@@ -307,8 +304,8 @@ TEST(GaussianFactorGraph, multiplyHessianAdd) {
 /* ************************************************************************* */
 static GaussianFactorGraph createGaussianFactorGraphWithHessianFactor() {
   GaussianFactorGraph gfg = createSimpleGaussianFactorGraph();
-  gfg += HessianFactor(1, 2, 100*I_2x2, Z_2x2,   Vector2(0.0, 1.0),
-                                           400*I_2x2, Vector2(1.0, 1.0), 3.0);
+  gfg.emplace_shared<HessianFactor>(1, 2, 100 * I_2x2, Z_2x2, Vector2(0.0, 1.0),
+                                    400 * I_2x2, Vector2(1.0, 1.0), 3.0);
   return gfg;
 }
 
@@ -319,15 +316,14 @@ TEST(GaussianFactorGraph, multiplyHessianAdd2) {
   // brute force
   Matrix AtA;
   Vector eta;
-  boost::tie(AtA, eta) = gfg.hessian();
+  std::tie(AtA, eta) = gfg.hessian();
   Vector X(6);
   X << 1, 2, 3, 4, 5, 6;
   Vector Y(6);
   Y << -450, -450, 300, 400, 2950, 3450;
   EXPECT(assert_equal(Y, AtA * X));
 
-  VectorValues x = map_list_of<Key, Vector>(0, Vector2(1, 2))(1, Vector2(3, 4))(2, Vector2(5, 6));
-
+  const VectorValues x {{0, Vector2(1, 2)}, {1, Vector2(3, 4)}, {2, Vector2(5, 6)}};
   VectorValues expected;
   expected.insert(0, Vector2(-450, -450));
   expected.insert(1, Vector2(300, 400));
@@ -347,10 +343,10 @@ TEST(GaussianFactorGraph, matricesMixed) {
   GaussianFactorGraph gfg = createGaussianFactorGraphWithHessianFactor();
   Matrix A;
   Vector b;
-  boost::tie(A, b) = gfg.jacobian();  // incorrect !
+  std::tie(A, b) = gfg.jacobian();  // incorrect !
   Matrix AtA;
   Vector eta;
-  boost::tie(AtA, eta) = gfg.hessian();  // correct
+  std::tie(AtA, eta) = gfg.hessian();  // correct
   EXPECT(assert_equal(A.transpose() * A, AtA));
   Vector expected = -(Vector(6) << -25, 17.5, 5, -13.5, 29, 4).finished();
   EXPECT(assert_equal(expected, eta));
@@ -371,10 +367,10 @@ TEST(GaussianFactorGraph, gradientAtZero) {
 /* ************************************************************************* */
 TEST(GaussianFactorGraph, clone) {
   // 2 variables, frontal has dim=4
-  VerticalBlockMatrix blockMatrix(list_of(4)(2)(1), 4);
+  VerticalBlockMatrix blockMatrix(KeyVector{4, 2, 1}, 4);
   blockMatrix.matrix() << 1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 0.1, 0.0, 1.0, 0.0, 2.0, 0.0, 3.0, 0.2, 0.0,
       0.0, 3.0, 0.0, 4.0, 0.0, 0.3, 0.0, 0.0, 0.0, 3.0, 0.0, 4.0, 0.4;
-  GaussianConditional cg(list_of(1)(2), 1, blockMatrix);
+  GaussianConditional cg(KeyVector{1, 2}, 1, blockMatrix);
 
   GaussianFactorGraph init_graph = createGaussianFactorGraphWithHessianFactor();
   init_graph.push_back(GaussianFactor::shared_ptr());  /// Add null factor
@@ -390,7 +386,7 @@ TEST(GaussianFactorGraph, clone) {
 
   // Apply an in-place change to init_graph and compare
   JacobianFactor::shared_ptr jacFactor0 =
-      boost::dynamic_pointer_cast<JacobianFactor>(init_graph.at(0));
+      std::dynamic_pointer_cast<JacobianFactor>(init_graph.at(0));
   CHECK(jacFactor0);
   jacFactor0->getA(jacFactor0->begin()) *= 7.;
   EXPECT(assert_inequal(init_graph, exp_graph));
@@ -426,11 +422,34 @@ TEST(GaussianFactorGraph, hessianDiagonal) {
   EXPECT(assert_equal(expected, actual));
 }
 
+/* ************************************************************************* */
 TEST(GaussianFactorGraph, DenseSolve) {
   GaussianFactorGraph fg = createSimpleGaussianFactorGraph();
   VectorValues expected = fg.optimize();
   VectorValues actual = fg.optimizeDensely();
   EXPECT(assert_equal(expected, actual));
+}
+
+/* ************************************************************************* */
+TEST(GaussianFactorGraph, ProbPrime) {
+  GaussianFactorGraph gfg;
+  gfg.emplace_shared<JacobianFactor>(1, I_1x1, Z_1x1,
+                                     noiseModel::Isotropic::Sigma(1, 1.0));
+
+  VectorValues values;
+  values.insert(1, I_1x1);
+
+  // We are testing the normal distribution PDF where info matrix Σ = 1,
+  // mean mu = 0  and x = 1.
+  // Therefore factor squared error: y = 0.5 * (Σ*x - mu)^2 =
+  // 0.5 * (1.0 - 0)^2 = 0.5
+  // NOTE the 0.5 constant is a part of the factor error.
+  EXPECT_DOUBLES_EQUAL(0.5, gfg.error(values), 1e-12);
+
+  // The gaussian PDF value is: exp^(-0.5 * (Σ*x - mu)^2) / sqrt(2 * PI)
+  // Ignore the denominator and we get: exp^(-0.5 * (1.0)^2) = exp^(-0.5)
+  double expected = exp(-0.5);
+  EXPECT_DOUBLES_EQUAL(expected, gfg.probPrime(values), 1e-12);
 }
 
 /* ************************************************************************* */
