@@ -702,62 +702,66 @@ void ISAM2::marginalizeLeaves(
 // Marked const but actually changes mutable delta
 void ISAM2::updateDelta(bool forceFullSolve) const {
   gttic(updateDelta);
-  if (params_.optimizationParams.type() == typeid(ISAM2GaussNewtonParams)) {
-    // If using Gauss-Newton, update with wildfireThreshold
-    const ISAM2GaussNewtonParams& gaussNewtonParams =
-        boost::get<ISAM2GaussNewtonParams>(params_.optimizationParams);
-    const double effectiveWildfireThreshold =
-        forceFullSolve ? 0.0 : gaussNewtonParams.wildfireThreshold;
-    gttic(Wildfire_update);
-    DeltaImpl::UpdateGaussNewtonDelta(roots_, deltaReplacedMask_,
-                                      effectiveWildfireThreshold, &delta_);
-    deltaReplacedMask_.clear();
-    gttoc(Wildfire_update);
+  try {
+    if (params_.optimizationParams.type() == typeid(ISAM2GaussNewtonParams)) {
+      // If using Gauss-Newton, update with wildfireThreshold
+      const ISAM2GaussNewtonParams& gaussNewtonParams =
+          boost::get<ISAM2GaussNewtonParams>(params_.optimizationParams);
+      const double effectiveWildfireThreshold =
+          forceFullSolve ? 0.0 : gaussNewtonParams.wildfireThreshold;
+      gttic(Wildfire_update);
+      DeltaImpl::UpdateGaussNewtonDelta(roots_, deltaReplacedMask_,
+                                        effectiveWildfireThreshold, &delta_);
+      deltaReplacedMask_.clear();
+      gttoc(Wildfire_update);
 
-  } else if (params_.optimizationParams.type() == typeid(ISAM2DoglegParams)) {
-    // If using Dogleg, do a Dogleg step
-    const ISAM2DoglegParams& doglegParams =
-        boost::get<ISAM2DoglegParams>(params_.optimizationParams);
-    const double effectiveWildfireThreshold =
-        forceFullSolve ? 0.0 : doglegParams.wildfireThreshold;
+    } else if (params_.optimizationParams.type() == typeid(ISAM2DoglegParams)) {
+      // If using Dogleg, do a Dogleg step
+      const ISAM2DoglegParams& doglegParams =
+          boost::get<ISAM2DoglegParams>(params_.optimizationParams);
+      const double effectiveWildfireThreshold =
+          forceFullSolve ? 0.0 : doglegParams.wildfireThreshold;
 
-    // Do one Dogleg iteration
-    gttic(Dogleg_Iterate);
+      // Do one Dogleg iteration
+      gttic(Dogleg_Iterate);
 
-    // Compute Newton's method step
-    gttic(Wildfire_update);
-    DeltaImpl::UpdateGaussNewtonDelta(
-        roots_, deltaReplacedMask_, effectiveWildfireThreshold, &deltaNewton_);
-    gttoc(Wildfire_update);
+      // Compute Newton's method step
+      gttic(Wildfire_update);
+      DeltaImpl::UpdateGaussNewtonDelta(
+          roots_, deltaReplacedMask_, effectiveWildfireThreshold, &deltaNewton_);
+      gttoc(Wildfire_update);
 
-    // Compute steepest descent step
-    const VectorValues gradAtZero = this->gradientAtZero();  // Compute gradient
-    DeltaImpl::UpdateRgProd(roots_, deltaReplacedMask_, gradAtZero,
-                            &RgProd_);  // Update RgProd
-    const VectorValues dx_u = DeltaImpl::ComputeGradientSearch(
-        gradAtZero, RgProd_);  // Compute gradient search point
+      // Compute steepest descent step
+      const VectorValues gradAtZero = this->gradientAtZero();  // Compute gradient
+      DeltaImpl::UpdateRgProd(roots_, deltaReplacedMask_, gradAtZero,
+                              &RgProd_);  // Update RgProd
+      const VectorValues dx_u = DeltaImpl::ComputeGradientSearch(
+          gradAtZero, RgProd_);  // Compute gradient search point
 
-    // Clear replaced keys mask because now we've updated deltaNewton_ and
-    // RgProd_
-    deltaReplacedMask_.clear();
+      // Clear replaced keys mask because now we've updated deltaNewton_ and
+      // RgProd_
+      deltaReplacedMask_.clear();
 
-    // Compute dogleg point
-    DoglegOptimizerImpl::IterationResult doglegResult(
-        DoglegOptimizerImpl::Iterate(
-            *doglegDelta_, doglegParams.adaptationMode, dx_u, deltaNewton_,
-            *this, nonlinearFactors_, theta_, nonlinearFactors_.error(theta_),
-            doglegParams.verbose));
-    gttoc(Dogleg_Iterate);
+      // Compute dogleg point
+      DoglegOptimizerImpl::IterationResult doglegResult(
+          DoglegOptimizerImpl::Iterate(
+              *doglegDelta_, doglegParams.adaptationMode, dx_u, deltaNewton_,
+              *this, nonlinearFactors_, theta_, nonlinearFactors_.error(theta_),
+              doglegParams.verbose));
+      gttoc(Dogleg_Iterate);
 
-    gttic(Copy_dx_d);
-    // Update Delta and linear step
-    doglegDelta_ = doglegResult.delta;
-    delta_ =
-        doglegResult
-            .dx_d;  // Copy the VectorValues containing with the linear solution
-    gttoc(Copy_dx_d);
-  } else {
-    throw std::runtime_error("iSAM2: unknown ISAM2Params type");
+      gttic(Copy_dx_d);
+      // Update Delta and linear step
+      doglegDelta_ = doglegResult.delta;
+      delta_ =
+          doglegResult
+              .dx_d;  // Copy the VectorValues containing with the linear solution
+      gttoc(Copy_dx_d);
+    } else {
+      throw std::runtime_error("iSAM2: unknown ISAM2Params type");
+    }
+  } catch (...) {
+    std::cout << "Error in updateDelta" << std::endl;
   }
 }
 
